@@ -30,7 +30,7 @@ class Configuration implements ConfigurationInterface
         return $treeBuilder;
     }
 
-    private static function isValidDateTime($dateTime)
+    private static function isValidDateTime(string $dateTime)
     {
         try {
             new \DateTime($dateTime);

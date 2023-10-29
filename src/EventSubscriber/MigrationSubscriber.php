@@ -27,7 +27,7 @@ final class MigrationSubscriber implements EventSubscriberInterface
     public function __construct(
         private readonly Configuration $configuration,
         private readonly ParameterBagInterface $bag,
-        LoggerInterface $logger,
+        private readonly LoggerInterface $logger,
         private readonly ManagerRegistry $registry,
         private readonly Filesystem $filesystem,
     ) {
@@ -43,7 +43,6 @@ final class MigrationSubscriber implements EventSubscriberInterface
             ]);
         }
 
-        $this->cutOff = new \DateTimeImmutable('2007-01-01');
         $this->projectDirectory = $bag->get('kernel.project_dir');
     }
 
@@ -93,13 +92,15 @@ final class MigrationSubscriber implements EventSubscriberInterface
             $filename = $migrationDirectory . '/' . $version . '.php';
 
             if ($this->filesystem->exists($filename)) {
+                $this->logger->info(sprintf('Removing migration file: %s', $filename));
                 $this->filesystem->remove($filename);
             }
         }
 
         $sql  = sprintf('DELETE FROM %s WHERE DATE(SUBSTRING(version, 27)) < :date', $this->tableName);
         $stmt = $connection->prepare($sql);
-        $stmt->executeStatement(['date' => $formattedDate]);
+        $affected = $stmt->executeStatement(['date' => $formattedDate]);
+        $this->logger->info(sprintf('Removed migrations: %d', $affected));
     }
 
     private function fetchMigrationConfig(string $yamlPath): array
