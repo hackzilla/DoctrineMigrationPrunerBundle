@@ -1,6 +1,6 @@
 {
     "name": "hackzilla/doctrine-migration-pruner-bundle",
-    "description": "Prune excess migrations",
+    "description": "Prune excess doctrine migrations",
     "license": "MIT",
     "authors": [
         {
