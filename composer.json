@@ -1,0 +1,21 @@
+{
+    "name": "hackzilla/doctrine-migration-pruner-bundle",
+    "description": "Prune excess migrations",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Daniel Platt",
+            "email": "github@ofdan.co.uk",
+            "homepage": "https://www.hackzilla.org"
+        }
+    ],
+    "require": {
+        "doctrine/doctrine-migrations-bundle": "^3.0",
+        "symfony/yaml": "^6.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Hackzilla\\DoctrineMigrationPrunerBundle\\": "src/"
+        }
+    }
+}
