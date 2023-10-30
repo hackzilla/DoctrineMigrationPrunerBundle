@@ -44,6 +44,8 @@ See all contributors on [GitHub](https://github.com/hackzilla/DoctrineMigrationP
 
 Please report issues using GitHub's issue tracker: [GitHub Repo](https://github.com/hackzilla/DoctrineMigrationPrunerBundle)
 
+If you find this project useful, consider [buying me a coffee](https://www.buymeacoffee.com/hackzilla).
+
 ## License
 
 This bundle is released under the MIT license. See the [LICENSE](https://github.com/hackzilla/DoctrineMigrationPrunerBundle/blob/main/LICENSE) file for details.
