@@ -6,6 +6,11 @@
 - Handles Doctrine migrations' multiple configurations.
 - Prevents warnings about missing migration files if you manually removed them.
 
+### Supported Platforms
+
+- MySQL
+- Sqlite
+
 ## Prerequisites
 - Requires Doctrine Migration Bundle.
 - Tested on Symfony 6, but should work wherever Doctrine Migrations Bundle v3.* is compatible.
