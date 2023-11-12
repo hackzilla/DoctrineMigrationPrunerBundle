@@ -83,10 +83,26 @@ final class MigrationSubscriber implements EventSubscriberInterface
         $formattedDate = $this->cutOff->format('Y-m-d H:i:s');
 
         $connection = $this->registry->getConnection($connectionName);
+        $platformName = $connection->getDatabasePlatform()->getName();
         $migrationDirectory = $migrationDirectories['DoctrineMigrations'];
 
-        $sql    = sprintf('SELECT SUBSTRING(version, 20) as version FROM %s
-        WHERE DATE(SUBSTRING(version, 27)) < :date', $this->tableName);
+        if ($platformName === 'sqlite') {
+            $sql    = sprintf("SELECT SUBSTRING(version, 20) as version FROM %s
+            WHERE DATETIME(
+                SUBSTR(version, 27, 4) || '-' ||
+                SUBSTR(version, 31, 2) || '-' ||
+                SUBSTR(version, 33, 2) || ' ' ||
+                SUBSTR(version, 35, 2) || ':' ||
+                SUBSTR(version, 37, 2) || ':' ||
+                SUBSTR(version, 39, 2)
+            ) < :date", $this->tableName);
+        } elseif ($platformName === 'mysql') {
+            $sql    = sprintf('SELECT SUBSTRING(version, 20) as version FROM %s
+            WHERE DATE(SUBSTRING(version, 27)) < :date', $this->tableName);
+        } else {
+            throw new Exception('Unhandled platform type: ' . $platformName);
+        }
+
         $stmt   = $connection->prepare($sql);
         $result = $stmt->executeQuery(['date' => $formattedDate]);
 
@@ -99,8 +115,6 @@ final class MigrationSubscriber implements EventSubscriberInterface
             }
         }
 
-        $platformName = $connection->getDatabasePlatform()->getName();
-
         if ($platformName === 'sqlite') {
             $sql = sprintf("DELETE FROM %s WHERE DATETIME(
                 SUBSTR(version, 27, 4) || '-' ||
@@ -112,8 +126,6 @@ final class MigrationSubscriber implements EventSubscriberInterface
             ) < :date", $this->tableName);
         } elseif ($platformName === 'mysql') {
             $sql = sprintf('DELETE FROM %s WHERE DATE(SUBSTRING(version, 27)) < :date', $this->tableName);
-        } else {
-            throw new Exception('Unhandled platform type: ' . $platformName);
         }
 
         $stmt = $connection->prepare($sql);
