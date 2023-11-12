@@ -8,6 +8,7 @@ use Doctrine\Migrations\Configuration\Configuration;
 use Doctrine\Migrations\DependencyFactory;
 use Doctrine\Migrations\Tools\Console\Command\MigrateCommand;
 use Doctrine\Persistence\ManagerRegistry;
+use Exception;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\ConsoleEvents;
 use Symfony\Component\Console\Event\ConsoleCommandEvent;
@@ -84,7 +85,8 @@ final class MigrationSubscriber implements EventSubscriberInterface
         $connection = $this->registry->getConnection($connectionName);
         $migrationDirectory = $migrationDirectories['DoctrineMigrations'];
 
-        $sql    = sprintf('SELECT SUBSTRING(version, 20) as version FROM %s WHERE DATE(SUBSTRING(version, 27)) < :date', $this->tableName);
+        $sql    = sprintf('SELECT SUBSTRING(version, 20) as version FROM %s
+        WHERE DATE(SUBSTRING(version, 27)) < :date', $this->tableName);
         $stmt   = $connection->prepare($sql);
         $result = $stmt->executeQuery(['date' => $formattedDate]);
 
@@ -97,7 +99,23 @@ final class MigrationSubscriber implements EventSubscriberInterface
             }
         }
 
-        $sql  = sprintf('DELETE FROM %s WHERE DATE(SUBSTRING(version, 27)) < :date', $this->tableName);
+        $platformName = $connection->getDatabasePlatform()->getName();
+
+        if ($platformName === 'sqlite') {
+            $sql = sprintf("DELETE FROM %s WHERE DATETIME(
+                SUBSTR(version, 27, 4) || '-' ||
+                SUBSTR(version, 31, 2) || '-' ||
+                SUBSTR(version, 33, 2) || ' ' ||
+                SUBSTR(version, 35, 2) || ':' ||
+                SUBSTR(version, 37, 2) || ':' ||
+                SUBSTR(version, 39, 2)
+            ) < :date", $this->tableName);
+        } elseif ($platformName === 'mysql') {
+            $sql = sprintf('DELETE FROM %s WHERE DATE(SUBSTRING(version, 27)) < :date', $this->tableName);
+        } else {
+            throw new Exception('Unhandled platform type: ' . $platformName);
+        }
+
         $stmt = $connection->prepare($sql);
         $affected = $stmt->executeStatement(['date' => $formattedDate]);
         $this->logger->info(sprintf('Removed migrations: %d', $affected));
