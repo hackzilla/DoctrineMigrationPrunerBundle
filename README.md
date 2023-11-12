@@ -44,6 +44,9 @@ Note: The pruning operation will not execute if the `--dry-run` option has been 
 ## Testing
 There are currently no tests available.
 
+However, you can use 
+[Doctrine Migration Pruner Repo](https://github.com/hackzilla/DoctrineMigrationPruner) to test the migration pruning.
+
 ## Contributions and Issues
 See all contributors on [GitHub](https://github.com/hackzilla/DoctrineMigrationPrunerBundle/graphs/contributors).
 
