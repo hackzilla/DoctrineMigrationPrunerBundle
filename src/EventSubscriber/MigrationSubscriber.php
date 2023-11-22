@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Hackzilla\DoctrineMigrationPrunerBundle\EventSubscriber;
 
+use Doctrine\DBAL\Connection;
 use Doctrine\Migrations\Configuration\Configuration;
 use Doctrine\Migrations\DependencyFactory;
 use Doctrine\Migrations\Tools\Console\Command\MigrateCommand;
@@ -12,9 +13,11 @@ use Exception;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\ConsoleEvents;
 use Symfony\Component\Console\Event\ConsoleCommandEvent;
+use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Finder\Finder;
 use Symfony\Component\Yaml\Yaml;
 
 final class MigrationSubscriber implements EventSubscriberInterface
@@ -82,55 +85,49 @@ final class MigrationSubscriber implements EventSubscriberInterface
 
         $formattedDate = $this->cutOff->format('Y-m-d H:i:s');
 
+        /** @var \Doctrine\DBAL\Connection $connection */
         $connection = $this->registry->getConnection($connectionName);
         $platformName = $connection->getDatabasePlatform()->getName();
         $migrationDirectory = $migrationDirectories['DoctrineMigrations'];
 
-        if ($platformName === 'sqlite') {
-            $sql    = sprintf("SELECT SUBSTRING(version, 20) as version FROM %s
-            WHERE DATETIME(
-                SUBSTR(version, 27, 4) || '-' ||
-                SUBSTR(version, 31, 2) || '-' ||
-                SUBSTR(version, 33, 2) || ' ' ||
-                SUBSTR(version, 35, 2) || ':' ||
-                SUBSTR(version, 37, 2) || ':' ||
-                SUBSTR(version, 39, 2)
-            ) < :date", $this->tableName);
-        } elseif ($platformName === 'mysql') {
-            $sql    = sprintf('SELECT SUBSTRING(version, 20) as version FROM %s
-            WHERE DATE(SUBSTRING(version, 27)) < :date', $this->tableName);
-        } else {
-            throw new Exception('Unhandled platform type: ' . $platformName);
-        }
+        $output = $event->getOutput();
 
-        $stmt   = $connection->prepare($sql);
-        $result = $stmt->executeQuery(['date' => $formattedDate]);
+        $finder = new Finder();
+        $finder->files()->in($migrationDirectory)->name('/^Version\d{14}\.php$/');
 
-        while ($version = $result->fetchOne()) {
-            $filename = $migrationDirectory . '/' . $version . '.php';
+        foreach ($finder as $file) {
+            $filename = $file->getFilename();
 
-            if ($this->filesystem->exists($filename)) {
-                $this->logger->info(sprintf('Removing migration file: %s', $filename));
-                $this->filesystem->remove($filename);
+            $dateString = substr($filename, 7, 14); // Extract '20210307203106'
+            $migrationDate = \DateTime::createFromFormat('YmdHis', $dateString);
+
+            if ($migrationDate && $migrationDate < $this->cutOff) {
+                $this->logInfo($output, sprintf('Removing migration file: %s', $file->getPathname()));
+                $this->filesystem->remove($file->getPathname());
             }
         }
 
-        if ($platformName === 'sqlite') {
-            $sql = sprintf("DELETE FROM %s WHERE DATETIME(
+        if ($this->isMigrationTableSetup($connection)) {
+            if ($platformName === 'sqlite') {
+                $sql = sprintf(
+                    "DELETE FROM %s WHERE DATETIME(
                 SUBSTR(version, 27, 4) || '-' ||
                 SUBSTR(version, 31, 2) || '-' ||
                 SUBSTR(version, 33, 2) || ' ' ||
                 SUBSTR(version, 35, 2) || ':' ||
                 SUBSTR(version, 37, 2) || ':' ||
                 SUBSTR(version, 39, 2)
-            ) < :date", $this->tableName);
-        } elseif ($platformName === 'mysql') {
-            $sql = sprintf('DELETE FROM %s WHERE DATE(SUBSTRING(version, 27)) < :date', $this->tableName);
-        }
+            ) < :date",
+                    $this->tableName
+                );
+            } elseif ($platformName === 'mysql') {
+                $sql = sprintf('DELETE FROM %s WHERE DATE(SUBSTRING(version, 27)) < :date', $this->tableName);
+            }
 
-        $stmt = $connection->prepare($sql);
-        $affected = $stmt->executeStatement(['date' => $formattedDate]);
-        $this->logger->info(sprintf('Removed migrations: %d', $affected));
+            $stmt = $connection->prepare($sql);
+            $affected = $stmt->executeStatement(['date' => $formattedDate]);
+            $this->logInfo($output, sprintf('Removed migrations from the database: %d', $affected));
+        }
     }
 
     private function fetchMigrationConfig(string $yamlPath): array
@@ -147,5 +144,34 @@ final class MigrationSubscriber implements EventSubscriberInterface
             'directories' => $config['migrations_paths'] ?? [],
             'em' => $config['em'] ?? null,
         ];
+    }
+
+    private function isMigrationTableSetup(Connection $connection): bool
+    {
+        $platformName = $connection->getDatabasePlatform()->getName();
+
+        if ($platformName === 'sqlite') {
+            $sql = "SELECT name FROM sqlite_master WHERE type='table' AND name = :table";
+        } elseif ($platformName === 'mysql') {
+            $sql = "SHOW TABLES LIKE :table";
+        } else {
+            throw new Exception('Unhandled platform type: ' . $platformName);
+        }
+
+        /** @var \Doctrine\DBAL\Statement $stmt */
+        $stmt = $connection->prepare($sql);
+        $stmt->bindValue('table', $this->tableName);
+        $stmt->execute();
+
+        return $stmt->executeQuery()->rowCount() > 0;
+    }
+
+    private function logInfo(OutputInterface $output, string $message): void
+    {
+        $this->logger->info($message);
+
+        if ($output->isVerbose()) {
+            $output->writeln($message);
+        }
     }
 }
