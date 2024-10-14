@@ -9,7 +9,7 @@ use Symfony\Component\Config\Definition\ConfigurationInterface;
 
 class Configuration implements ConfigurationInterface
 {
-    public function getConfigTreeBuilder()
+    public function getConfigTreeBuilder(): TreeBuilder
     {
         $treeBuilder = new TreeBuilder('hackzilla_doctrine_migration_pruner');
 
@@ -30,7 +30,7 @@ class Configuration implements ConfigurationInterface
         return $treeBuilder;
     }
 
-    private static function isValidDateTime(string $dateTime)
+    private static function isValidDateTime(string $dateTime): bool
     {
         try {
             new \DateTime($dateTime);
